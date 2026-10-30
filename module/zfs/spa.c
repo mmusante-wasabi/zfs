@@ -226,7 +226,7 @@ boolean_t	spa_mode_readable_spacemaps = B_FALSE;
  * This (illegal) pool name is used when temporarily importing a spa_t in order
  * to get the vdev stats associated with the imported devices.
  */
-#define	TRYIMPORT_NAME	"$import"
+#define	TRYIMPORT_NAME	"$import-"
 
 /*
  * For debugging purposes: print out vdev tree during pool import.
@@ -1838,7 +1838,8 @@ spa_activate(spa_t *spa, spa_mode_t mode)
 
 #ifdef HAVE_SPA_THREAD
 	/* Only create a process if we're going to be around a while. */
-	if (spa_create_process && strcmp(spa->spa_name, TRYIMPORT_NAME) != 0) {
+	if (spa_create_process && strncmp(spa->spa_name, TRYIMPORT_NAME,
+	    sizeof (TRYIMPORT_NAME) - 1) != 0) {
 		if (newproc(spa_thread, (caddr_t)spa, syscid, maxclsyspri,
 		    NULL, 0) == 0) {
 			spa->spa_proc_state = SPA_PROC_CREATED;
@@ -7818,7 +7819,7 @@ spa_tryimport(nvlist_t *tryconfig)
 	 * Create and initialize the spa structure.
 	 */
 	char *name = kmem_alloc(MAXPATHLEN, KM_SLEEP);
-	(void) snprintf(name, MAXPATHLEN, "%s-%llx-%s",
+	(void) snprintf(name, MAXPATHLEN, "%s%llx-%s",
 	    TRYIMPORT_NAME, (u_longlong_t)(uintptr_t)curthread, poolname);
 
 	spa_namespace_enter(FTAG);
@@ -7886,22 +7887,22 @@ spa_tryimport(nvlist_t *tryconfig)
 
 			/*
 			 * We have to play games with the name since the
-			 * pool was opened as TRYIMPORT_NAME.
+			 * pool was opened as $import-<...>-poolname
 			 */
 			if (dsl_dsobj_to_dsname(spa_name(spa),
 			    spa->spa_bootfs, tmpname) == 0) {
-				char *cp;
-				char *dsname;
+				char *cp, *dsname;
+				char *load_name = spa_load_name(spa);
 
 				dsname = kmem_alloc(MAXPATHLEN, KM_SLEEP);
 
 				cp = strchr(tmpname, '/');
 				if (cp == NULL) {
-					(void) strlcpy(dsname, tmpname,
+					(void) strlcpy(dsname, load_name,
 					    MAXPATHLEN);
 				} else {
 					(void) snprintf(dsname, MAXPATHLEN,
-					    "%s/%s", spa_load_name(spa), ++cp);
+					    "%s/%s", load_name, ++cp);
 				}
 				fnvlist_add_string(config, ZPOOL_CONFIG_BOOTFS,
 				    dsname);
